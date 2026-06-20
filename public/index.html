@@ -683,7 +683,39 @@ function switchTab(tab){
    ============================================================ */
 let playlist = []; // [{id, title}], audio bytes live on the server
 let currentIndex = -1;
+let pendingPlay = false;
 const audioEl = new Audio();
+audioEl.preload = 'auto';
+audioEl.autoplay = false;
+
+audioEl.addEventListener('waiting', ()=>{
+  document.getElementById('nowPlaying').textContent = currentIndex === -1 ? 'Buffering...' : 'Loading ' + (playlist[currentIndex]?.title || 'track');
+});
+
+audioEl.addEventListener('playing', ()=>{
+  pendingPlay = false;
+  updatePlayerUI();
+});
+
+audioEl.addEventListener('canplay', ()=>{
+  if (pendingPlay){
+    audioEl.play().catch(()=>{});
+    pendingPlay = false;
+  }
+  if (!audioEl.paused) updatePlayerUI();
+});
+
+audioEl.addEventListener('canplaythrough', ()=>{
+  if (!audioEl.paused) updatePlayerUI();
+});
+
+audioEl.addEventListener('stalled', ()=>{
+  showToast('⚠️ Network slow, buffering...');
+});
+
+audioEl.addEventListener('error', ()=>{
+  showToast('⚠️ Audio playback error');
+});
 
 async function loadPlaylist(){
   playlist = await API.getSongs();
@@ -759,7 +791,10 @@ async function removeSong(idx){
 function playSong(idx){
   if(idx < 0 || idx >= playlist.length) return;
   currentIndex = idx;
+  pendingPlay = true;
+  audioEl.pause();
   audioEl.src = '/api/songs/' + playlist[idx].id + '/stream';
+  audioEl.load();
   audioEl.play().catch(()=>{});
   updatePlayerUI();
   renderPlaylist();
