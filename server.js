@@ -150,9 +150,14 @@ app.delete('/api/songs/:id', async (req, res, next) => {
 });
 
 app.get('/api/songs/:id/stream', async (req, res, next) => {
+  const startTime = Date.now();
+  console.log(`STREAM START ${req.params.id} range=${req.headers.range || 'none'}`);
   try {
     const { rows } = await pool.query('SELECT mimetype, data FROM songs WHERE id=$1', [req.params.id]);
-    if (!rows.length) return res.status(404).end();
+    if (!rows.length) {
+      console.log(`STREAM MISSING ${req.params.id}`);
+      return res.status(404).end();
+    }
     const { mimetype, data } = rows[0];
     const buf = data;
     const range = req.headers.range;
@@ -167,6 +172,7 @@ app.get('/api/songs/:id/stream', async (req, res, next) => {
         'Content-Type': mimetype
       });
       res.end(buf.slice(start, end + 1));
+      console.log(`STREAM SENT ${req.params.id} bytes=${start}-${end} time=${Date.now()-startTime}ms`);
     } else {
       res.writeHead(200, {
         'Content-Length': buf.length,
@@ -174,8 +180,12 @@ app.get('/api/songs/:id/stream', async (req, res, next) => {
         'Accept-Ranges': 'bytes'
       });
       res.end(buf);
+      console.log(`STREAM SENT ${req.params.id} bytes=full time=${Date.now()-startTime}ms`);
     }
-  } catch (e) { next(e); }
+  } catch (e) {
+    console.error(`STREAM ERROR ${req.params.id}`, e);
+    next(e);
+  }
 });
 
 /* ============================================================
